@@ -1,0 +1,32 @@
+workflows:
+  android-debug-build:
+    name: Imou Audio Controller - Debug APK
+    max_build_duration: 30
+    instance_type: linux_x2
+    environment:
+      groups:
+        # أنشئ مجموعة متغيرات بيئة باسم imou_credentials من لوحة Codemagic
+        # (Environment variables) وضع فيها IMOU_APP_ID / IMOU_APP_SECRET
+        # كمتغيرات بيئة سرّية (Secure). لا تُكتب القيم هنا مطلقًا.
+        - imou_credentials
+      vars:
+        PACKAGE_NAME: "com.esa.imouaudiocontroller"
+      java: 17
+    scripts:
+      - name: Set executable permission for gradlew
+        script: chmod +x ./gradlew
+      - name: Build debug APK
+        script: |
+          # IMOU_APP_ID و IMOU_APP_SECRET تصل تلقائيًا كمتغيرات بيئة من مجموعة
+          # imou_credentials أعلاه، ويقرأها app/build.gradle.kts عبر System.getenv().
+          ./gradlew assembleDebug
+    artifacts:
+      - app/build/outputs/apk/debug/app-debug.apk
+      - app/build/outputs/**/*.apk
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
