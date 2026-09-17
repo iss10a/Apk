@@ -1,0 +1,61 @@
+workflows:
+  imou-audio-controller-debug:
+    name: Imou Audio Controller - Debug APK
+    max_build_duration: 30
+    environment:
+      vars:
+        JAVA_VERSION: "17"
+      java: 17
+    scripts:
+      - name: Locate the Gradle project (handles a root-level zip or a nested folder)
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR"
+          echo "Repo root contents:"
+          ls -la
+
+          # If the project was committed as a .zip at the repo root, unzip it here.
+          shopt -s nullglob
+          for z in *.zip; do
+            echo "Found zip at repo root: $z -- unzipping"
+            unzip -o "$z" -d "$CM_BUILD_DIR"
+          done
+
+          # settings.gradle.kts may be at the root, or inside a subfolder
+          # (e.g. if the repo has an ImouAudioController/ subdirectory, or the
+          # zip above extracted into one). Search a few levels deep and use
+          # whichever directory actually contains it.
+          FOUND=$(find "$CM_BUILD_DIR" -maxdepth 5 -name "settings.gradle.kts" | head -1)
+          if [ -z "$FOUND" ]; then
+            echo "ERROR: settings.gradle.kts not found anywhere under $CM_BUILD_DIR"
+            echo "Full tree (depth 3):"
+            find "$CM_BUILD_DIR" -maxdepth 3
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$FOUND")
+          echo "$PROJECT_DIR" > "$CM_BUILD_DIR/.project_dir"
+          echo "Using Gradle project directory: $PROJECT_DIR"
+
+      - name: Generate Gradle wrapper (jar is intentionally not committed)
+        script: |
+          set -e
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/.project_dir")
+          cd "$PROJECT_DIR"
+          which gradle || echo "WARNING: system gradle not found, adjust this step"
+          gradle wrapper --gradle-version 8.7
+          chmod +x ./gradlew
+
+      - name: Build debug APK
+        script: |
+          set -e
+          PROJECT_DIR=$(cat "$CM_BUILD_DIR/.project_dir")
+          cd "$PROJECT_DIR"
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Locate the produced APK (do not assume the path)
+        script: |
+          find "$CM_BUILD_DIR" -name "*.apk" -print
+
+    artifacts:
+      - "**/app/build/outputs/apk/debug/*.apk"
+      - "**/app/build/outputs/**/*.apk"
