@@ -1,0 +1,63 @@
+workflows:
+  android-debug-build:
+    name: Imou Audio Controller - Debug APK
+    max_build_duration: 30
+    instance_type: linux_x2
+    environment:
+      groups:
+        # أنشئ مجموعة متغيرات بيئة باسم imou_credentials من لوحة Codemagic
+        # (Environment variables) وضع فيها IMOU_APP_ID / IMOU_APP_SECRET
+        # كمتغيرات بيئة سرّية (Secure). لا تُكتب القيم هنا مطلقًا، والمجموعة
+        # اختيارية تمامًا في هذه المرحلة (لا استخدام فعلي لـ Imou SDK بعد).
+        - imou_credentials
+      java: 17
+    scripts:
+      - name: Make gradlew executable
+        script: chmod +x ./gradlew
+
+      - name: Bootstrap Gradle wrapper jar (gradle-wrapper.jar غير مرفوع في ZIP)
+        script: |
+          # صور Codemagic Linux (Ubuntu 24.04) تأتي مع نسخ Gradle مثبّتة مسبقًا
+          # تحت /home/builder/programs/. نستخدمها لتوليد gradle/wrapper/gradle-wrapper.jar
+          # فعليًا بنفس إصدار Gradle المحدد في gradle-wrapper.properties (8.7)
+          # بدل رفع ملف .jar ثنائي جاهز داخل المستودع.
+          SYSTEM_GRADLE=""
+          for candidate in \
+            "/home/builder/programs/gradle-8.13/bin/gradle" \
+            "/home/builder/programs/gradle-8.11.1/bin/gradle" \
+            "/home/builder/programs/gradle-8.1.1/bin/gradle"; do
+            if [ -x "$candidate" ]; then
+              SYSTEM_GRADLE="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$SYSTEM_GRADLE" ] && command -v gradle >/dev/null 2>&1; then
+            SYSTEM_GRADLE="gradle"
+          fi
+
+          if [ -z "$SYSTEM_GRADLE" ]; then
+            echo "لم يُعثر على Gradle مثبّت مسبقًا على صورة الـCI. راجع توثيق Codemagic لمسار Gradle الحالي."
+            exit 1
+          fi
+
+          echo "Using system Gradle: $SYSTEM_GRADLE"
+          "$SYSTEM_GRADLE" wrapper --gradle-version 8.7
+
+      - name: Build debug APK
+        script: |
+          # IMOU_APP_ID و IMOU_APP_SECRET (إن وُجدا في مجموعة imou_credentials)
+          # يصلان تلقائيًا كمتغيرات بيئة، ويقرأهما app/build.gradle.kts عبر System.getenv().
+          ./gradlew assembleDebug --stacktrace
+
+    artifacts:
+      - app/build/outputs/apk/debug/app-debug.apk
+      - app/build/outputs/**/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
